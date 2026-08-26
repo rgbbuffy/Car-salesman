@@ -47,6 +47,7 @@ export interface BuyerLead {
   status: "NEW" | "QUALIFYING" | "SERIOUS" | "APPOINTMENT" | "CLOSED" | "ESCALATED";
   intentScore: number;
   lastMessageAt?: string;
+  latestOffer?: number;
 }
 
 export interface ConversationMessage {
@@ -68,6 +69,7 @@ export interface AgentToolCall {
 export interface Offer {
   id: string;
   leadId: string;
+  vehicleId: string;
   amount: number;
   currency: "USD";
   decision: NegotiationDecision;
@@ -109,4 +111,15 @@ export interface OwnerEscalation {
   recommendedAction: string;
   status: "PENDING" | "APPROVED" | "DECLINED" | "COUNTERED";
   createdAt: string;
+}
+
+export interface IntegrationSettings {
+  ownerName: string;
+  ownerEmail: string;
+  ownerPhone: string;
+  dealershipName: string;
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
+  nhtsaApiEnabled: boolean;
+  autoScheduleAppointments: boolean;
 }

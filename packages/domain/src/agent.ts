@@ -10,6 +10,15 @@ export interface SalesAgentResponse {
   appointment?: Appointment;
 }
 
+/**
+ * LLM API Integration Connection Point
+ * ------------------------------------
+ * To connect a real commercial LLM API (e.g. OpenAI GPT-4o or Anthropic Claude 3.5 Sonnet):
+ * 1. Read process.env.OPENAI_API_KEY or settings.openaiApiKey.
+ * 2. Invoke the LLM with system prompt + vehicle specs + sales policy rules.
+ * 3. Pass agent tools (`get_vehicle`, `evaluate_offer`, `create_owner_escalation`, `propose_appointment`).
+ * 4. Execute tool calls and enforce deterministic `evaluateOffer` guardrail.
+ */
 export function processBuyerMessage(
   lead: BuyerLead,
   vehicle: Vehicle,
@@ -26,7 +35,7 @@ export function processBuyerMessage(
 
   const lowerText = userMessageText.toLowerCase();
 
-  // Log tool call: get_vehicle fact check
+  // Tool Call execution: get_vehicle fact lookup
   toolCalls.push({
     toolName: "get_vehicle",
     args: { vehicleId: vehicle.id, vin: vehicle.vin },
@@ -34,13 +43,12 @@ export function processBuyerMessage(
     timestamp
   });
 
-  // Check offer pattern ($15,000 or 15000 or "offer 14000")
+  // Offer detection
   const offerMatch = userMessageText.match(/\$?(\d{1,3}(?:,\d{3})*|\d{4,6})/);
   const isOfferContext = lowerText.includes("offer") || lowerText.includes("give you") || lowerText.includes("take") || lowerText.includes("pay") || offerMatch !== null;
 
   if (isOfferContext && offerMatch) {
     const numericValue = parseInt(offerMatch[1].replace(/,/g, ''), 10);
-    // Exclude year-like values unless explicit offer context
     if (numericValue > 1000 && numericValue !== vehicle.year) {
       intentScore = Math.max(intentScore, 75);
       leadStatus = "SERIOUS";
@@ -102,7 +110,7 @@ export function processBuyerMessage(
     }
   }
 
-  // Check appointment / inspection request
+  // Appointment detection
   if (lowerText.includes("appointment") || lowerText.includes("see the car") || lowerText.includes("test drive") || lowerText.includes("inspect") || lowerText.includes("meet")) {
     intentScore = Math.max(intentScore, 85);
     leadStatus = "APPOINTMENT";
@@ -158,26 +166,6 @@ export function processBuyerMessage(
     };
   }
 
-  // General questions (engine, mileage, condition)
-  if (lowerText.includes("mileage") || lowerText.includes("miles")) {
-    return {
-      replyText: vehicle.mileage ? `This ${vehicle.year} ${vehicle.make} ${vehicle.model} currently has ${vehicle.mileage.toLocaleString()} miles.` : `The mileage on this ${vehicle.year} ${vehicle.make} ${vehicle.model} is verified and low. Let me know if you would like full details!`,
-      leadStatus: "QUALIFYING",
-      intentScore: intentScore + 10,
-      toolCalls
-    };
-  }
-
-  if (lowerText.includes("condition") || lowerText.includes("clean") || lowerText.includes("damage")) {
-    return {
-      replyText: vehicle.notes ? `Condition notes: ${vehicle.notes}` : `This vehicle is in excellent overall condition with clear title status.`,
-      leadStatus: "QUALIFYING",
-      intentScore: intentScore + 10,
-      toolCalls
-    };
-  }
-
-  // Default helpful response
   return {
     replyText: `Thank you for inquiring about the ${vehicle.year || ''} ${vehicle.make || ''} ${vehicle.model || 'vehicle'}. Asking price is $${(policy.askingPrice || vehicle.askingPrice || 0).toLocaleString()}. Would you like to check available features, make an offer, or schedule a test drive?`,
     leadStatus: leadStatus === "NEW" ? "QUALIFYING" : leadStatus,
